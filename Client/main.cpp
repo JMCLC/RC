@@ -6,7 +6,10 @@
 #include <cctype>
 
 using namespace std;
-int wordSize, errors, currentMove, playerId;
+int wordSize, errors, currentMove, playerId, fd;
+struct addrinfo hints, *res;
+struct sockaddr_in addr;
+string port, server_ip;
 
 vector<string> stringSplitter(string text) {
     vector<string> res;
@@ -20,7 +23,7 @@ vector<string> stringSplitter(string text) {
 
 vector<string> sendMessageToServer(string message) {
     char buffer[128];
-    ssize_t n = sendto(*fd, code, sizeof(code), 0, *res->ai_addr, *res->ai_addrlen);
+    ssize_t n = sendto(fd, code, sizeof(code), 0, res->ai_addr, res->ai_addrlen);
     n = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&addr, &sizeof(addr));
     if (n == -1)
         cout << "Time out" << endl
@@ -103,7 +106,6 @@ void startGame(int* fd, struct sockaddr_in* addr, struct addrinfo *res, string* 
 }
 
 void main(int argc, char** args) {
-    string port, server_ip;
     if (argc > 0) {
         switch(args[0]) {
             case '-n':
@@ -128,19 +130,16 @@ void main(int argc, char** args) {
         port = "58061";
     if (server_ip == NULL)
         server_ip = "127.0.0.1";
-
-    struct addrinfo hints, *res;
-    struct sockaddr_in addr;
     struct timeval timeout = 5;
     string message;
-    int fd = socket(AF_INET, SOCK_DGRAM, 0), i;
+    fd = socket(AF_INET, SOCK_DGRAM, 0), i;
     setsocketopt(fd, SOL_SOCKET, SO_RCVTIMEO, timeout, sizeof(timeout));
-
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     errcode = getaddrinfo(server_ip, port, &hints, &res);
-
+    if (errcode == -1)
+        cout << "Invalid server ip" << endl;
     getline(cin, message);
     int i = message.find(" ");
     plid = message.erase(0, i);
