@@ -10,6 +10,7 @@ int wordSize, errors, currentMove, playerId, fd;
 struct addrinfo hints, *res;
 struct sockaddr_in addr;
 string port, server_ip;
+string currentWord;
 socklen_t addrlen;
 ssize_t n;
 
@@ -33,38 +34,48 @@ vector<string> sendMessageToServer(string message) {
 }
 
 void start(string plId) {
-    vector<string> response = sendMessageToServer("SNG " + plId + "\n")
+    vector<string> response = sendMessageToServer("SNG " + plId + "\n");
     playerId = atoi(plId);
     if (response[1] == "OK") {
-        string wordSizeString;
         wordSize = atoi(command[2]);
         errors = atoi(command[3]);
         for (int i = 0; i < wordSize; i++)
-            wordSizeString.append("_");
-            cout << "New game started (max " << errors << " errors): " << wordSizeString << endl
+            currentWord.append("_");
+            cout << "New game started (max " << errors << " errors): " << currentWord << endl
     } else
         cout << "There is already an ongoing game for this player id" << endl;
 }
 
 void play(string letter) {
-    vector<string> response = sendMessageToServer("PLG " + string(playerId) + " " + toLower(letter) + " " + string(currentMove) + "\n")
+    vector<string> response = sendMessageToServer("PLG " + string(playerId) + " " + toUpper(letter) + " " + string(currentMove) + "\n");
     if (response[0] == "RLG") {
         switch(response[1]) {
             case "OK":
-                cout << 'Yes, "' + letter + '" is part of the word: ' << currentState() << endl;
+                int numberOfHits = atoi(response[3]);
+                for (int i = 0; i < numberOfHits; i++) {
+                    currentWord[atoi(response[i + 4]) - 1] = toUpper(letter[0]);
+                }
+                cout << 'Yes, "' + letter + '" is part of the word: ' << currentWord << endl;
+                currentMove++:
                 break;
             case "WIN":
-                cout << "WELL DONE! You guessed: " << currentState() << endl;
+                for (int i = 0; i < sizeof(currentWord); i++)
+                    if (currentWord[i] == "_")
+                        currentWord[i] = toUpper(letter[0])
+                cout << "WELL DONE! You guessed: " << currentWord << endl;
+                currentMove++;
                 break;
             case "DUP":
                 cout << "This letter has already been sent" << endl;
                 break;
             case "NOK":
-                cout << 'No, "' + letter + '" is not part of the word: ' << currentState() << endl;
-                errors -= 1;
+                cout << 'No, "' + letter + '" is not part of the word' << endl;
+                errors--;
+                currentMove++;
                 break;
             case "OVR":
                 cout << "Game over!" << endl;
+                currentMove;
                 break;
             case "INV":
 
@@ -75,6 +86,32 @@ void play(string letter) {
         }
     } else
         cout << "Error" << endl
+}
+
+void guess(string word) {
+    vector<string> response = sendMessageToServer("PWG " + string(playerId) + " " + toUpper(word) + " " + string(currentMove) + "\n");
+    if (response[0] == "RWG") {
+        switch(response[1]) {
+            case "WIN":
+                currentWord = word;
+                cout << "WELL DONE! You guessed: " << currentWord << endl;
+                currentMove++;
+                break;
+            case "NOK":
+                cout << 'No, "' + word + '" is not the word';
+                errors--;
+                currentMove++;
+                break;
+            case "OVR":
+                cout << "Game over!" << endl;
+                currentMove;
+                break;
+            case "INV":
+                break;
+            case "ERR":
+                break;
+        }
+    }
 }
 
 void handleGame() {
@@ -91,6 +128,7 @@ void handleGame() {
                 play(command[1]);
                 break;
             case "guess": case "gw":
+                guess(command[1]);
                 break;
             case "scoreboard": case "sb":
                 break;
@@ -103,8 +141,6 @@ void handleGame() {
         }
     }
 }
-
-
 
 void main(int argc, char** args) {
     if (argc > 0) {
