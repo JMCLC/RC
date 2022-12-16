@@ -1,5 +1,6 @@
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -31,6 +32,49 @@ vector<string> sendMessageToServer(string message) {
     if (n == -1)
         cout << "Time out" << endl
     return stringSplitter(string(buffer))
+}
+
+void sendMessageToServerTCP(string message) {
+    struct addrinfo tcp_hints;
+    vector<string> response;
+    string currentString;
+    char buffer[128];
+    ssize_t tcp_n;
+    int tcp_fd = socket(AF_INET, SOCK_STREAM, 0), currentSize = 0, count = 0;
+    tcp_hints.ai_family = AF_INET;
+    tcp_hints.ai_socktype = SOCK_STREAM;
+    tcp_n = connect(tcp_fd, res->ai_addr, res->ai_addrlen);
+    tcp_n = write(tcp_fd, message, sizeof(message));
+    tcp_n = read(tcp_fd, buffer, 128);
+    response = stringSplitter(string(buffer));
+    if (response[1] == "OK") {
+        ofstream File(response[2]);
+        for (int i = 0; i < sizeof(buffer); i++) {
+            if (buffer[i] == " ") {
+                count++;
+            }
+            if (count == 4) {
+                currentString = string(buffer).substr(i + 1, sizeof(i + 2));
+                break;
+            }
+        }
+        for (currentSize = sizeof(currentString); currentSize < atoi(response[3]); currentSize += sizeof(currentString)) {
+            File << currentString;
+            if (atoi(response[3]) - currentSize < 128)
+                tcp_n = read(tcp_fd, buffer, atoi(response[3]) - currentSize);
+            else
+                tcp_n = read(tcp_fd, buffer, 128);
+            currentString = string(buffer); 
+        }
+        File.close();
+    }
+    if (response[0] == "RSB")
+        printScoreboard(response[2]);
+    else (response[0] == "RHL")
+        cout << "received hint file: " << response[2] << " (" << response[3] << " bytes)" << endl;
+    else (response[0] == "RST")
+        printGameState(response[2]);
+    close(tcp_n);
 }
 
 void start(string plId) {
