@@ -26,18 +26,20 @@ vector<string> stringSplitter(string text) {
 }
 
 vector<string> sendMessageToServer(string message) {
+    string response;
     char buffer[128];
     n = sendto(fd, message, sizeof(message), 0, res->ai_addr, res->ai_addrlen);
     n = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&addr, &sizeof(addr));
     if (n == -1)
         cout << "Time out" << endl
-    return stringSplitter(string(buffer))
+    response = buffer;
+    return stringSplitter(response);
 }
 
 void sendMessageToServerTCP(string message) {
     struct addrinfo tcp_hints;
     vector<string> response;
-    string currentString;
+    string currentString, stringBuffer;
     char buffer[128];
     ssize_t tcp_n;
     int tcp_fd = socket(AF_INET, SOCK_STREAM, 0), currentSize = 0, count = 0;
@@ -46,7 +48,8 @@ void sendMessageToServerTCP(string message) {
     tcp_n = connect(tcp_fd, res->ai_addr, res->ai_addrlen);
     tcp_n = write(tcp_fd, message, sizeof(message));
     tcp_n = read(tcp_fd, buffer, 128);
-    response = stringSplitter(string(buffer));
+    stringBuffer = buffer;
+    response = stringSplitter(stringBuffer);
     if (response[1] == "OK") {
         ofstream File(response[2]);
         for (int i = 0; i < sizeof(buffer); i++) {
@@ -54,7 +57,8 @@ void sendMessageToServerTCP(string message) {
                 count++;
             }
             if (count == 4) {
-                currentString = string(buffer).substr(i + 1, sizeof(i + 2));
+                currentString = buffer;
+                currentString = currentString.substr(i + 1, sizeof(i + 2));
                 break;
             }
         }
@@ -64,7 +68,7 @@ void sendMessageToServerTCP(string message) {
                 tcp_n = read(tcp_fd, buffer, atoi(response[3]) - currentSize);
             else
                 tcp_n = read(tcp_fd, buffer, 128);
-            currentString = string(buffer); 
+            currentString = buffer; 
         }
         File.close();
     }
@@ -91,7 +95,7 @@ void start(string plId) {
 }
 
 void play(string letter) {
-    vector<string> response = sendMessageToServer("PLG " + string(playerId) + " " + toUpper(letter) + " " + string(currentMove) + "\n");
+    vector<string> response = sendMessageToServer("PLG " + to_string(playerId) + " " + toUpper(letter) + " " + to_string(currentMove) + "\n");
     if (response[0] == "RLG") {
         switch(response[1]) {
             case "OK":
@@ -133,7 +137,7 @@ void play(string letter) {
 }
 
 void guess(string word) {
-    vector<string> response = sendMessageToServer("PWG " + string(playerId) + " " + toUpper(word) + " " + string(currentMove) + "\n");
+    vector<string> response = sendMessageToServer("PWG " + to_string(playerId) + " " + toUpper(word) + " " + to_string(currentMove) + "\n");
     if (response[0] == "RWG") {
         switch(response[1]) {
             case "WIN":
