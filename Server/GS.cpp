@@ -160,27 +160,20 @@ return "ERR\n";
 } 
 
 string quit(string PLID){
-    int P_id = stoi(PLID);
-    string response;
-    if(SV_Game.find(P_id) == SV_Game.end()){
-        SV_Game[P_id].status = "OK";
+    if(gameList.find(stoi(PLID)) == gameList.end()){;
         cout << "PLID=" << PLID << "game ongoing" << endl;
-        response = ("RQT " + SV_Game[P_id].status + "\n");
-        return response;
+        return "RQT OK\n";
     }
     else{
-        SV_Game[P_id].status = "ERR";
         cout << "PLID=" << PLID << "no game found" << endl;
-        response = ("RQT " + SV_Game[P_id].status + "\n");
-        return response;
+        return "RQT ERR\n";
     }
 }
 
 string reveal(string PLID){
-    int P_id = stoi(PLID);
     string response;
-    cout << "PLID=" << PLID << "sending word \"" + SV_Game[P_id].word + "\" to client"<< endl;
-    response =("RRV" + SV_Game[P_id].word + "\n");
+    cout << "PLID=" << PLID << "sending word \"" + gameList[stoi(PLID)].word + "\" to client"<< endl;
+    response =("RRV" + gameList[stoi(PLID)].word + "\n");
     return response;
 
 }
