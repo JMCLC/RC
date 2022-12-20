@@ -16,7 +16,7 @@
 #include <iterator>
 #include <sstream>
 
-int fd,errcode;
+int fd,newfd,errcode;
 ssize_t n;
 socklen_t addrlen;
 struct addrinfo hints,*res;
@@ -28,12 +28,14 @@ string word_file,S_port;
 
 typedef struct{
     int trials;
+    int s_trials;
     string word;
     string pos;
     string status;
     string letter;
     int max_errors;
     int attempts;
+    int score;
     map <string,string> cpy_word;
 }game;
 map<int,game> SV_Game;
@@ -77,6 +79,7 @@ string RSG(string PLID,map<int,game> SV_Game,string word_file){
     game SV;
     SV.word = random_word(word_file);
     SV.trials = 1;
+<<<<<<< HEAD
     if (SV.word.length() <= 6)
         max_errors = 7;
     else if (SV.word.length()<=10)
@@ -133,6 +136,7 @@ string RLG(string PLID,string str,map<int,game> SV_Game){
         if(*str.c_str() == str_test[i]){
             SV_Game[P_id].status = "OK";
             SV_Game[P_id].trials++;
+            SV_Game[P_id].s_trials++;
             cout << "PLID=" << PLID << "play letter \"" + str + "\" - " + to_string(n_hits) + " hits;word not guessed" << endl;
             response = ("RLG " + SV_Game[P_id].status +  to_string(SV_Game[P_id].trials) + to_string(n_hits) + "\n");
             return response;
@@ -155,6 +159,7 @@ string RLG(string PLID,string str,map<int,game> SV_Game){
     if(str_test.compare(SV_Game[P_id].word) == 0){
         SV_Game[P_id].status = "WIN";
         SV_Game[P_id].trials++;
+        SV_Game[P_id].s_trials++;
         cout << "PLID=" << PLID << "play letter \"" + str + "\" - " + to_string(n_hits) + " hits;word guessed" << endl;
         response = ("RLG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
         return response;
@@ -166,13 +171,25 @@ return "ERR\n";
 
 string RWG(string PLID,string word,string trial,map<int,game> SV_Game){
     int P_id = stoi(PLID);
-    string response;
+    string response,gameData;
     if(word.compare(SV_Game[P_id].letter) == 0){
         SV_Game[P_id].status = "WIN";
         SV_Game[P_id].trials++;
-        cout << "PLID=" << PLID << "guess \"" + word + "\" - "  + SV_Game[P_id].status + " (game ended)" << endl;
-        response = ("RWG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
-        return response;
+        SV_Game[P_id].s_trials++;
+        SV_Game[P_id].score = (SV_Game[P_id].s_trials*100)/SV_Game[P_id].trials;
+            fstream file;
+    file.open("/home/gd/GS/SCORES/_"+ PLID + "_31/12/2022.txt",ios::out);
+    if(!file){
+        cout << "Error in creating file" << endl;
+    }
+    gameData = (to_string(SV_Game[P_id].score) + PLID  + " " + SV_Game[P_id].word + " " + to_string(SV_Game[P_id].s_trials) + to_string(SV_Game[P_id].trials));
+    file << gameData;
+    if (file.is_open()){
+    cout << "Stream could not close!" << endl;
+    }
+    cout << "PLID=" << PLID << "guess \"" + word + "\" - "  + SV_Game[P_id].status + " (game ended)" << endl;
+    response = ("RWG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
+    return response;
     }
     else if(word.compare(SV_Game[P_id].letter) != 0 && SV_Game[P_id].attempts > 0){
         SV_Game[P_id].status = "NOK";
@@ -263,6 +280,50 @@ void handleGame(string S_port,string word_file){
             response = RRV(PLID,SV_Game);
         cout << "Sending command: " << response;
         n = sendto(fd, response.c_str(), response.length(), 0, (struct sockaddr*)&addr, addrlen);
+    }
+}
+
+bool file_empty(std::ifstream& pFile){
+     return pFile.peek() == std::ifstream::traits_type::eof();
+}
+
+void sendScoreboard(char bufffer[128]){
+    std::ifstream file("/home/gd/GS/SCORES/_top10_scores.txt");
+    if(file_empty(file) == true){
+        bzero(buffer,sizeof(buffer));
+        
+    }
+}
+
+void createTCPconnection(string S_port){
+    string code;
+    fd = socket(AF_INET,SOCK_STREAM,0);
+    if(fd == -1) exit(1);
+
+    memset(&hints,0,sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    errcode = getaddrinfo(NULL,S_port.c_str(),&hints,&res);
+    if((errcode != 0)) exit(1);
+
+    n = bind(fd,res->ai_addr,res->ai_addrlen);
+    if(n==-1) exit(1);
+
+    if(listen(fd,100) == -1) exit(1);
+
+    while(1){
+        addrlen = sizeof(addr);
+        if(newfd =accept(fd,(struct sockaddr*)&addr,&addrlen) == -1) exit(1);
+
+        n = read(newfd,buffer,128);
+        if(n == -1) exit(1);
+
+        sscanf(buffer,"%s",code);
+        if(code.compare("GSB") == 0){
+            sendScoreboard(buffer);
+        }
     }
 }
 
