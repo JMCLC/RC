@@ -30,6 +30,16 @@ void printArray(vector<string> array) {
     cout << endl;
 }
 
+string printCurrentWord() {
+    string wordOutput = "";
+    for (int i = 0; i < wordSize - 1; i++) {
+        wordOutput += currentWord[i];
+        wordOutput += ' ';
+    }
+    wordOutput += currentWord.back();
+    return wordOutput;
+}
+
 vector<string> stringSplitter(string text) {
     stringstream text_stream(text);
     istream_iterator<string> begin(text_stream);
@@ -124,8 +134,8 @@ void start(string plId) {
         maxErrors = stoi(response[3]);
         currentMove++;
         for (int i = 0; i < wordSize; i++)
-            currentWord.append("_ ");
-            cout << "New game started (max " << maxErrors << " errors): " << currentWord << endl;
+            currentWord.append("_");
+        cout << "New game started (max " << maxErrors << " errors): " << printCurrentWord() << endl;
     } else
         cout << "There is already an ongoing game for this player id" << endl;
 }
@@ -138,21 +148,21 @@ void play(string letter) {
         return;
     if (response[0] == "RLG") {
         if (response[1] == "OK") {
-            for (int i = 1; i <= stoi(response[2]); i++){ 
-                cout << currentWord[1] << endl;
-                currentWord[(stoi(response[i + 2])*2)-2] = toupper(letter[0]);}
-            cout << "Yes, " << letter << " is part of the word: " << currentWord << endl;
+            for (int i = 0; i < stoi(response[3]); i++)
+                currentWord[stoi(response[i + 4]) - 1] = toupper(letter[0]);
+            cout << "Yes, " << toUpper(letter) << " is part of the word: " << printCurrentWord() << endl;
             currentMove++;
         } else if (response[1] == "WIN") {
             for (int i = 0; i < sizeof(currentWord); i++)
                 if (currentWord[i] == '_')
                     currentWord[i] = toupper(letter[0]);
-            cout << "WELL DONE! You guessed: " << currentWord << endl;
+            cout << "WELL DONE! You guessed: " << toUpper(printCurrentWord()) << endl;
             currentMove++;
+            //resetGame();
         } else if (response[1] == "DUP") {
             cout << "This letter has already been sent" << endl;
         } else if (response[1] == "NOK") {
-            cout << "No, " << letter << " is not part of the word" << endl;
+            cout << "No, " << toUpper(letter) << " is not part of the word" << endl;
             currentErrors++;
             currentMove++;
         } else if (response[1] == "OVR") {
@@ -176,8 +186,9 @@ void guess(string word) {
     if (response[0] == "RWG") {
         if (response[1] == "WIN") {
             currentWord = word;
-            cout << "WELL DONE! You guessed: " << currentWord << endl;
-            currentMove++;            
+            cout << "WELL DONE! You guessed: " << toUpper(printCurrentWord()) << endl;
+            currentMove++; 
+            //resetGame();
         } else if (response[1] == "NOK") {
             cout << "No, " << word << " is not the word";
             currentErrors++;
@@ -205,9 +216,16 @@ void state() {
     return;
 }
 
-void quit() {
-    exit(1);
-    return;
+void quit(string command) {
+    vector<string> response = sendMessageToServer("QUT " + to_string(playerId) + "\n");
+    if (command == "quit") {
+        if (response[1] == "ERR")
+            cout << "Error" << endl;
+        else if (response[1] == "NOK")
+            cout << "There is no ongoing game" << endl;
+        else
+            cout << "Previous game has been quit" << endl;
+    }
 }
 
 void handleGame() {
@@ -231,7 +249,7 @@ void handleGame() {
         else if (command[0] == "state" || command[0] == "st")
             state();
         else if (command[0] == "quit" || command[0] == "exit")
-            quit();
+            quit(command[0]);
         else
             cout << "This is not a valid command!" << endl;
     }
