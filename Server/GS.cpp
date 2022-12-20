@@ -86,6 +86,16 @@ string RSG(string PLID,map<int,game> SV_Game,string word_file){
         max_errors = 8;
     else
         max_errors = 9;
+=======
+    SV.s_trials = 0;
+    SV.score = 0;
+    if (SV.word.length() <= 6)
+        max_errors = 7;
+    else if(SV.word.length()<=10)
+        max_errors = 8;
+    else 
+        max_errors = 9;
+>>>>>>> 9f9377ecadb3696d83e5c0b55f0f8728bb753911
     SV.max_errors = max_errors;
     SV.attempts = max_errors;
     SV.status = "OK";
