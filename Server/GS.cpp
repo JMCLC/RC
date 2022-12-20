@@ -16,6 +16,8 @@
 #include <iterator>
 #include <sstream>
 
+using namespace std;
+
 typedef struct{
     int currentMove = 1, maxErrors, currentErrors = 0;
     vector<char> lettersPlayed;
@@ -27,7 +29,6 @@ struct sockaddr_in addr;
 string word_file,S_port;
 map<int,game> gameList;
 int fd, newfd, errcode, verboseMode = 1;
-using namespace std;
 socklen_t addrlen;
 char buffer[128];
 ssize_t n;
@@ -70,7 +71,7 @@ string start(string plId){
     if (gameList.find(stoi(plId)) != gameList.end())
         return "RSG NOK\n";
     newGame.word = random_word();    
-    for (int i = 0; i < wordSize - 1; i++)
+    for (int i = 0; i < newGame.word.length() - 1; i++)
         newGame.currentWord.append("_");
     if (newGame.word.length() <= 6)
         newGame.maxErrors = 7;
@@ -80,20 +81,72 @@ string start(string plId){
         newGame.maxErrors = 9;
     if (verboseMode == 1)
         cout << "PLID=" << plId << ": new game; word = \"" << newGame.word << "\" ("<< newGame.word.length() << " letters)" << endl;
-    response = ("RSG OK" + " " + to_string(newGame.word.length()) + " " + to_string(newGame.maxErrors) + "\n");    
+    response = ("RSG OK  " + to_string(newGame.word.length()) + " " + to_string(newGame.maxErrors) + "\n");    
     gameList[stoi(plId)] = newGame;
     return response;
 }
 
 string play(int plId, string letter, int trial){
-    if (letter.length() > 1 || gameList.find(plId) == gameList.end())
-        return "RWG ERR\n";
-    else if ((gameList[plId].currentMove - 1 == trial && gameList[plId].lettersPlayed.back() != letter[0]) || trial > gameList[plId].currentMove || trial < gameList[plId].currentMove - 1)
-        return "RWG INV\n";
+    cout << trial  << gameList[plId].currentMove << endl;
+    if (letter.length() > 1 || gameList.find(plId) == gameList.end()){
+        return "RWG ERR\n"; }
+    else if ((gameList[plId].currentMove - 1 == trial && gameList[plId].lettersPlayed.back() != letter[0])|| trial > gameList[plId].currentMove || trial < gameList[plId].currentMove - 1){ 
+        return "RWG INV\n";}
     for (int i = 0; i < gameList[plId].lettersPlayed.size(); i++)
         if (gameList[plId].lettersPlayed[i] == letter[0])
             return "RWG DUP\n";
-    if (gameList[plId].word.find(letter[0]) == gameList[plId].word.end()) {
+    //if (gameList[plId].word.find(letter) == gameList[plId].word.end()) {
+        //gameList[plId].currentErrors++;
+        //if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
+            //gameList.erase(plId);
+            //return "RWG OVR\n";
+        //} else
+    vector<int> positions;
+    int missing;
+    for (int i = 0; i < gameList[plId].word.length(); i++) {;
+        if (letter[0] == gameList[plId].word[i]) 
+            positions.push_back(i + 1);
+            cout << letter[0] << endl;
+        if (gameList[plId].currentWord[i] == *"_")
+            missing++;
+    }
+    if (missing == positions.size()) {
+        //winGame();
+        return "RLG WIN\n";
+    }
+    gameList[plId].currentMove++;
+    string response = ("RLG OK " + to_string(positions.size()) + " ");
+    for (int i = 0; i < positions.size() - 1; i++){ 
+        response.append((to_string(positions[i]) + " "));}
+    cout << "err"<< endl;
+        for (int i = 0; i < gameList[plId].word.length();i++){
+        cout << "err"<< endl;
+        if (*letter.c_str() == gameList[plId].word[i]){
+            break;
+        }
+        response.erase();
+        response = "RLG NOK";
+    }
+    response.append(to_string(positions.back()));
+    return response;
+}
+
+string guess(int plId ,string word,string trial){
+    string response,gameData;
+            fstream file;
+    file.open(*"/home/gd/GS/SCORES/_"+ plId + "_31/12/2022.txt",ios::out);
+    if(!file){
+        cout << "Error in creating file" << endl;
+    }
+    gameData = (plId  + " " + gameList[plId].word + " " + to_string(gameList[plId].currentMove-gameList[plId].currentErrors) + to_string(gameList[plId].currentMove));
+    file << gameData;
+    if (file.is_open()){
+    cout << "Stream could not close!" << endl;
+    }
+    cout << "PLID=" << plId << "guess \"" + word + "\" -WIN (game ended)" << endl;
+    //winGame();
+    return "RWG WIN\n";
+    if (gameList[plId].word == word) {
         gameList[plId].currentErrors++;
         if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
             gameList.erase(plId);
@@ -101,63 +154,8 @@ string play(int plId, string letter, int trial){
         } else
             return "RWG NOK\n";
     }
-    vector<int> positions;
-    int missing;
-    for (int i = 0; i < gameList[plId].word.length(); i++) {
-        if (letter[0] == gameList[plId].word[i])
-            positions.push_back(i + 1);
-        if (gameList[plId].currentWord[i] == "_")
-            missing++;
-    }
-    if (missing == positions.size()) {
-        winGame();
-        return "RWG WIN\n";
-    }
-    response = ("RWG OK " + to_string(positions.size()) + " ");
-    for (int i = 0; i < positions.size() - 1; i++)
-        response.append((to_string(positions[i]) + " "));
-    response.append(to_string(positions.back()));
-    return response;
+    return "ERR\n"; 
 }
-
-string guess(string PLID,string word,string trial){
-    int P_id = stoi(PLID);
-    string response,gameData;
-    if(word.compare(SV_Game[P_id].letter) == 0){
-        SV_Game[P_id].status = "WIN";
-        SV_Game[P_id].trials++;
-        SV_Game[P_id].s_trials++;
-        SV_Game[P_id].score = (SV_Game[P_id].s_trials*100)/SV_Game[P_id].trials;
-            fstream file;
-    file.open("/home/gd/GS/SCORES/_"+ PLID + "_31/12/2022.txt",ios::out);
-    if(!file){
-        cout << "Error in creating file" << endl;
-    }
-    gameData = (to_string(SV_Game[P_id].score) + PLID  + " " + SV_Game[P_id].word + " " + to_string(SV_Game[P_id].s_trials) + to_string(SV_Game[P_id].trials));
-    file << gameData;
-    if (file.is_open()){
-    cout << "Stream could not close!" << endl;
-    }
-    cout << "PLID=" << PLID << "guess \"" + word + "\" - "  + SV_Game[P_id].status + " (game ended)" << endl;
-    response = ("RWG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
-    return response;
-    }
-    else if(word.compare(SV_Game[P_id].letter) != 0 && SV_Game[P_id].attempts > 0){
-        SV_Game[P_id].status = "NOK";
-        SV_Game[P_id].trials++;
-        cout << "PLID=" << PLID << "guess \"" + word + "\" - "  + SV_Game[P_id].status + " " + to_string(SV_Game[P_id].trials) + "attempts left" << endl;
-        response = ("RWG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
-        return response;
-    }
-    else if(word.compare(SV_Game[P_id].letter) != 0 && SV_Game[P_id].attempts == 0){
-        SV_Game[P_id].status = "OVR";
-        SV_Game[P_id].trials++;
-        cout << "PLID=" << PLID << "guess \"" + word + "\" - "  + SV_Game[P_id].status + "(game ended)" << endl;
-        response = ("RWG " + SV_Game[P_id].status + to_string(SV_Game[P_id].trials) + "\n");
-        return response;
-    }
-return "ERR\n"; 
-} 
 
 string quit(string PLID){
     if(gameList.find(stoi(PLID)) == gameList.end()){;
@@ -189,16 +187,17 @@ void handleGame(){
         bufferStr.substr(0, n);
         currentCommand = stringSplitter(bufferStr);
         cout << "Received command: " << currentCommand[0] << endl;
-        if (code == "SNG")
+        if (currentCommand[0] == "SNG")
             response = start(currentCommand[1]);
-        else if (code == "PLG")
-            response = play(stoi(currentCommand[1]), currentCommand[2], currentCommand[3]);
-        else if(code == "PWG")
+        else if (currentCommand[0] == "PLG"){ 
+            cout << currentCommand[1] << currentCommand[2] << currentCommand[3] << endl;
+            response = play(stoi(currentCommand[1]), currentCommand[2], stoi(currentCommand[3]));}
+        else if(currentCommand[0] == "PWG")
             response = guess(stoi(currentCommand[1]), currentCommand[2], currentCommand[3]);
-        else if(code == "QUT")
-            response = quit(stoi(currentCommand[1]));
-        else if(code == "REV")
-            response = reveal(stoi(currentCommand[1]));
+        else if(currentCommand[0] == "QUT")
+            response = quit(currentCommand[1]);
+        else if(currentCommand[0] == "REV")
+            response = reveal(currentCommand[1]);
         cout << "Sending command: " << response;
         n = sendto(fd, response.c_str(), response.length(), 0, (struct sockaddr*)&addr, addrlen);
     }
