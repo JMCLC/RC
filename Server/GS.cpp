@@ -13,6 +13,8 @@
 #include <netdb.h>
 #include <map>
 #include <ctype.h>
+#include <iterator>
+#include <sstream>
 
 int fd,errcode;
 ssize_t n;
@@ -36,32 +38,36 @@ typedef struct{
 }game;
 map<int,game> SV_Game;
 
+void printArray(vector<string> array) {
+    for (int i = 0; i < array.size(); i++) {
+        cout << array[i] << endl;
+    }
+}
 
+vector<string> stringSplitter(string text) {
+    stringstream text_stream(text);
+    istream_iterator<string> begin(text_stream);
+    istream_iterator<string> end;
+    vector<string> res(begin, end);
+    return res;
+}
 
-string random_word(string word_file)
-{
+string random_word(string word_file) {
     string line;
     vector<string> lines;
-    
     srand(time(0));
-    
     ifstream file(word_file);
     
     int total_lines=0;
-    while(getline(file,line))
-    {
+    while(getline(file,line)) {
        total_lines++; 
-    lines.push_back(line);  
-  }
+        lines.push_back(line);  
+    }
    
     int random_number=rand()%total_lines;
-
     string rw = lines[random_number];
 
-    cout<<lines[random_number] << endl;
-
     return rw;
-  
 }
 
 string RSG(string PLID,map<int,game> SV_Game,string word_file){
@@ -71,15 +77,12 @@ string RSG(string PLID,map<int,game> SV_Game,string word_file){
     game SV;
     SV.word = random_word(word_file);
     SV.trials = 1;
-    if (SV.word.length() <= 6){
-                max_errors = 7;
-            }
-    else if(SV.word.length()<=10){
-                max_errors = 8;
-        }
-    else {
-                max_errors = 9;
-        }
+    if (SV.word.length() <= 6)
+        max_errors = 7;
+    else if (SV.word.length()<=10)
+        max_errors = 8;
+    else
+        max_errors = 9;
     SV.max_errors = max_errors;
     SV.attempts = max_errors;
     SV.status = "OK";
@@ -92,8 +95,8 @@ string RSG(string PLID,map<int,game> SV_Game,string word_file){
         response = ("RSG " + SV_Game[P_id].status +  "\n");
         n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
     }
-    cout << "PLID=" << PLID << ": new game; word = \"" + SV_Game[P_id].word + "\"(" + to_string(SV_Game[P_id].max_errors) + " letters)"<<endl; 
-    response = ("RSG " + to_string(SV.word.length()) + " " + to_string(SV.max_errors) + " " +  "\n");
+    cout << "PLID=" << PLID << ": new game; word = \"" << SV.word << "\" ("<< SV.word.length() << " letters)" << endl;
+    response = ("RSG " + SV.status + " " + to_string(SV.word.length()) + " " + to_string(SV.max_errors) + "\n");
     return response;
 }
 
@@ -216,52 +219,50 @@ string RRV(string PLID,map<int,game> SV_Game){
 
 
 void handleGame(string S_port,string word_file){
-        char code[3],PLID[7],str1[31],str2[5];
-        string rw,response;
-        fd=socket(AF_INET,SOCK_DGRAM,0); //UDP socket
-        if(fd==-1) /*error*/exit(1);
+    string code, PLID, str1, str2;
+    //char *code,*PLID,*str1,*str2;
+    vector<string> currentCommand;
+    string rw,response, bufferStr;
+    fd=socket(AF_INET,SOCK_DGRAM,0); //UDP socket
+    if(fd==-1) /*error*/exit(1);
         
-        memset(&hints,0,sizeof hints);
-        hints.ai_family=AF_INET; // IPv4
-        hints.ai_socktype=SOCK_DGRAM; // UDP socket
-        hints.ai_flags=AI_PASSIVE;
+    memset(&hints,0,sizeof hints);
+    hints.ai_family=AF_INET; // IPv4
+    hints.ai_socktype=SOCK_DGRAM; // UDP socket
+    hints.ai_flags=AI_PASSIVE;
         
-        errcode=getaddrinfo(NULL,S_port.c_str(),&hints,&res);
-        if(errcode!=0) /*error*/ exit(1);
+    errcode=getaddrinfo(NULL,S_port.c_str(),&hints,&res);
+    if(errcode!=0) /*error*/ exit(1);
         
-        n = bind(fd,res->ai_addr,res->ai_addrlen);
-        if(n==-1) exit(1);
+    n = bind(fd,res->ai_addr,res->ai_addrlen);
         
-        while(1){ 
+    while(1){
+        addrlen = sizeof(addr);
         n = recvfrom(fd,buffer,sizeof(buffer),0,(struct sockaddr*)&addr,&addrlen);
-        if(n==-1) exit(1);
-        sscanf(buffer,"%s %s %s %s",code,PLID,str1,str2);
-        if(strcmp(code,"SNG") == 0 ){
+        //if(n==-1) exit(1);
+        //sscanf(buffer,"%s %s %s %s",code,PLID,str1,str2);
+        bufferStr = buffer;
+        bufferStr.substr(0, n);
+        currentCommand = stringSplitter(bufferStr);
+        code = currentCommand[0];
+        PLID = currentCommand[1];
+        if (currentCommand.size() > 2)
+            str1 = currentCommand[2];
+        if (currentCommand.size() > 3)
+            str2 = currentCommand[3];
+        cout << "Received command: " << code << " " << PLID << " " << str1 << " " << str2 << endl;
+        if (code == "SNG")
             response = RSG(PLID,SV_Game,word_file);
-            n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
-            if(n==-1) exit(1);
-
-        }
-        else if(strcmp(code,"PLG") == 0){
+        else if (code == "PLG")
             response = RLG(PLID,str1,SV_Game);
-            n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
-            if(n==-1) exit(1);
-        }
-        else if(strcmp(code,"PWG") == 0){
+        else if(code == "PWG")
             response = RWG(PLID,str1,str2,SV_Game);
-            n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
-            if(n==-1) exit(1);
-        }
-        else if(strcmp(code,"QUT") == 0){
-        response = RQT(PLID,SV_Game);
-        n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
-        if(n==-1) exit(1);
-        }
-        else if(strcmp(code,"REV") == 0){
-        response = RRV(PLID,SV_Game);
-        n = sendto(fd,response.c_str(),n,0,(struct sockaddr*)&addr,addrlen);
-        if(n==-1) exit(1);
-        }
+        else if(code == "QUT")
+            response = RQT(PLID,SV_Game);
+        else if(code == "REV")
+            response = RRV(PLID,SV_Game);
+        cout << "Sending command: " << response;
+        n = sendto(fd, response.c_str(), response.length(), 0, (struct sockaddr*)&addr, addrlen);
     }
 }
 

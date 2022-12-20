@@ -25,8 +25,9 @@ ssize_t n;
 
 void printArray(vector<string> array) {
     for (int i = 0; i < array.size(); i++) {
-        cout << array[i] << endl;
+        cout << array[i] << " ";
     }
+    cout << endl;
 }
 
 vector<string> stringSplitter(string text) {
@@ -46,13 +47,15 @@ string toUpper(string text) {
 vector<string> sendMessageToServer(string message) {
     string response;
     char buffer[128];
-    n = sendto(fd, message.c_str(), sizeof(message.c_str()), 0, res->ai_addr, res->ai_addrlen);
-    n = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&addr, &addrlen);
+    n = sendto(fd, message.c_str(), message.length(), 0, res->ai_addr, res->ai_addrlen);
+    addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*)&addr, &addrlen);
     if (n == -1) {
         cout << "Did not receive a response from the server in time" << endl;
         return {};
     }
     response = buffer;
+    response = response.substr(0, n);
     return stringSplitter(response);
 }
 
@@ -111,14 +114,17 @@ void sendMessageToServerTCP(string message) {
 
 void start(string plId) {
     vector<string> response = sendMessageToServer("SNG " + plId + "\n");
+    cout << "Received: ";
+    printArray(response);
     if (response.size() == 0)
         return;
     playerId = stoi(plId);
     if (response[1] == "OK") {
         wordSize = stoi(response[2]);
         errors = stoi(response[3]);
+        currentMove++;
         for (int i = 0; i < wordSize; i++)
-            currentWord.append("_");
+            currentWord.append("_ ");
             cout << "New game started (max " << errors << " errors): " << currentWord << endl;
     } else
         cout << "There is already an ongoing game for this player id" << endl;
@@ -126,6 +132,8 @@ void start(string plId) {
 
 void play(string letter) {
     vector<string> response = sendMessageToServer("PLG " + to_string(playerId) + " " + toUpper(letter) + " " + to_string(currentMove) + "\n");
+    cout << "Received: ";
+    printArray(response);
     if (response.size() == 0)
         return;
     if (response[0] == "RLG") {
@@ -160,6 +168,8 @@ void play(string letter) {
 
 void guess(string word) {
     vector<string> response = sendMessageToServer("PWG " + to_string(playerId) + " " + toUpper(word) + " " + to_string(currentMove) + "\n");
+    cout << "Received: ";
+    printArray(response);
     if (response.size() == 0)
         return;
     if (response[0] == "RWG") {
@@ -207,7 +217,6 @@ void handleGame() {
         if (line.length() == 0)
             continue;
         command = stringSplitter(line);
-        printArray(command);
         if (command[0] == "start" || command[0] == "sg")
             start(command[1]);
         else if (command[0] == "play" || command[0] == "pl")
@@ -259,7 +268,6 @@ int main(int argc, char** args) {
         cout << "Could not reach the specified server" << endl;
         return 0;
     }
-    addrlen = sizeof(addr);
     handleGame();
     freeaddrinfo(res);
     close(fd);
