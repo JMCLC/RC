@@ -15,7 +15,7 @@
 #include <sstream>
 
 using namespace std;
-int wordSize, errors, currentMove, playerId, fd, error;
+int wordSize, maxErrors, currentErrors, currentMove, playerId, fd, error;
 struct addrinfo hints, *res;
 struct sockaddr_in addr;
 string port, server_ip;
@@ -121,11 +121,11 @@ void start(string plId) {
     playerId = stoi(plId);
     if (response[1] == "OK") {
         wordSize = stoi(response[2]);
-        errors = stoi(response[3]);
+        maxErrors = stoi(response[3]);
         currentMove++;
         for (int i = 0; i < wordSize; i++)
             currentWord.append("_ ");
-            cout << "New game started (max " << errors << " errors): " << currentWord << endl;
+            cout << "New game started (max " << maxErrors << " errors): " << currentWord << endl;
     } else
         cout << "There is already an ongoing game for this player id" << endl;
 }
@@ -152,7 +152,7 @@ void play(string letter) {
             cout << "This letter has already been sent" << endl;
         } else if (response[1] == "NOK") {
             cout << "No, " << letter << " is not part of the word" << endl;
-            errors--;
+            currentErrors++;
             currentMove++;
         } else if (response[1] == "OVR") {
             cout << "Game over!" << endl;
@@ -179,7 +179,7 @@ void guess(string word) {
             currentMove++;            
         } else if (response[1] == "NOK") {
             cout << "No, " << word << " is not the word";
-            errors--;
+            currentErrors++;
             currentMove++;
         } else if (response[1] == "OVR") {
             cout << "Game over!" << endl;
