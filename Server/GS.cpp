@@ -32,7 +32,6 @@ string word_file,S_port;
 map<int,game> gameList;
 
 socklen_t addrlen;
-char buffer[128];
 ssize_t n;
 
 void printArray(vector<string> array) {
@@ -139,6 +138,7 @@ string guess(int plId, string word, int trial){
     for (int i = 0; i < gameList[plId].wordsGuessed.size(); i++)
         if (toUpper(gameList[plId].wordsGuessed[i]) == toUpper(word))
             return "RWG DUP\n";
+    gameList[plId].currentMove++;
     if (gameList[plId].word != word) {
         gameList[plId].currentErrors++;
         if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
@@ -185,33 +185,37 @@ string quit(int plId) {
     }
 }
 
-void handleGame(){
+void handleGame() {
     vector<string> currentCommand;
-    string response, bufferStr;        
+    string response, bufferStr;
+    char buffer[128]; 
     while (1) {
+        memset(buffer, 0, sizeof(buffer));
         addrlen = sizeof(addr);
         n = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&addr, &addrlen);
         bufferStr = buffer;
         bufferStr.substr(0, n);
         currentCommand = stringSplitter(bufferStr);
-        cout << "Received command: " << currentCommand[0] << endl;
+        cout << "Received command: " << buffer << endl;
         if (currentCommand[0] == "SNG")
             response = start(currentCommand[1]);
         else if (currentCommand[0] == "PLG") { 
-            cout << currentCommand[1] << " " << currentCommand[2] << " " << currentCommand[3] << endl;
-            if (currentCommand.size() != 4)
+            if (currentCommand.size() != 4) {
+                cout << "Bad Formatting" << endl;
                 response = "RLG ERR\n";
-            else
+            } else
                 response = play(stoi(currentCommand[1]), currentCommand[2], stoi(currentCommand[3]));
         } else if(currentCommand[0] == "PWG") {
-            if (currentCommand.size() != 4)
-                response = "RWG ERR\n";
-            else
+            if (currentCommand.size() != 4) {
+                cout << "Bad Formatting" << endl;
+                response = "RLG ERR\n";
+            } else
                 response = guess(stoi(currentCommand[1]), currentCommand[2], stoi(currentCommand[3]));
         } else if(currentCommand[0] == "QUT") {
-            if (currentCommand.size() != 2)
+            if (currentCommand.size() != 2) {
+                cout << "Bad Formatting" << endl;
                 response = "RQT ERR\n";
-            else
+            } else
                 response = quit(stoi(currentCommand[1]));
         }
         cout << "Sending command: " << response;
@@ -223,15 +227,16 @@ bool file_empty(std::ifstream& pFile){
      return pFile.peek() == std::ifstream::traits_type::eof();
 }
 
-void sendScoreboard(char bufffer[128]){
-    std::ifstream file("/home/gd/GS/SCORES/_top10_scores.txt");
-    if(file_empty(file) == true){
-        bzero(buffer,sizeof(buffer));
+// void sendScoreboard(char buffer[128]){
+//     std::ifstream file("/home/gd/GS/SCORES/_top10_scores.txt");
+//     if(file_empty(file) == true){
+//         bzero(buffer,sizeof(buffer));
         
-    }
-}
+//     }
+// }
 
 void createTCPconnection(string S_port){
+    char buffer[128];
     string code;
     fd = socket(AF_INET,SOCK_STREAM,0);
     if(fd == -1) exit(1);
@@ -257,9 +262,9 @@ void createTCPconnection(string S_port){
         if(n == -1) exit(1);
 
         //sscanf(buffer,"%s",code);
-        if(code.compare("GSB") == 0){
-            sendScoreboard(buffer);
-        }
+        // if(code.compare("GSB") == 0){
+        //     sendScoreboard(buffer);
+        // }
     }
 }
 

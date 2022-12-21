@@ -132,7 +132,9 @@ void start(string plId) {
     if (response[1] == "OK") {
         wordSize = stoi(response[2]);
         maxErrors = stoi(response[3]);
-        currentMove++;
+        currentMove = 1;
+        currentErrors = 0;
+        currentWord = "";
         for (int i = 0; i < wordSize; i++)
             currentWord.append("_");
         cout << "New game started (max " << maxErrors << " errors): " << printCurrentWord() << endl;
@@ -167,7 +169,7 @@ void play(string letter) {
             currentMove++;
         } else if (response[1] == "OVR") {
             cout << "Game over!" << endl;
-            currentMove;
+            currentMove++;
         } else if (response[1] == "INV") {
             return;
         } else if (response[1] == "ERR") {
@@ -190,9 +192,11 @@ void guess(string word) {
             currentMove++; 
             //resetGame();
         } else if (response[1] == "NOK") {
-            cout << "No, " << word << " is not the word";
+            cout << "No, " << word << " is not the word" << endl;
             currentErrors++;
             currentMove++;
+        } else if (response[1] == "DUP") {
+            cout << "This word has already been guessed" << endl;
         } else if (response[1] == "OVR") {
             cout << "Game over!" << endl;
             currentMove;
@@ -252,6 +256,7 @@ void handleGame() {
             quit(command[0]);
         else
             cout << "This is not a valid command!" << endl;
+        line = "";
     }
 }
 
