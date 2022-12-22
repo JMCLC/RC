@@ -13,6 +13,7 @@
 #include <vector>
 #include <iterator>
 #include <sstream>
+#include <arpa/inet.h>
 
 using namespace std;
 int wordSize, maxErrors, currentErrors, currentMove, playerId, fd, error;
@@ -63,6 +64,10 @@ void resetGame() {
     currentWord = "";
 }
 
+void printState() {
+    return;
+}
+
 vector<string> sendMessageToServer(string message) {
     string response;
     char buffer[128];
@@ -78,30 +83,54 @@ vector<string> sendMessageToServer(string message) {
     return stringSplitter(response);
 }
 
+
+
 void sendMessageToServerTCP(string message) {
-    cout << "Trying TCP" << endl;
+    int socket_desc;
+    struct sockaddr_in server;
+    char *parray;
+
+
+    //Create socket
+    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+
+    if (socket_desc == -1) {
+    printf("Could not create socket");
+    }
+
+    memset(&server,0,sizeof(server));
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server.sin_family = AF_INET;
+    server.sin_port = htons(stoi(port));
+
+    //Connect to remote server
+    connect(socket_desc , (struct sockaddr *)&server , sizeof(server));
+    receive_image(socket_desc);
+
+    close(socket_desc);
+}
+
+void sendMessageToServerTCP(string message) {
     int size = 0, bufferSize = 0, status = -1, currentSize = 0, tcpFd, readSize = -1;
     char buffer[10241], confirmation[] = "OK";
-    struct addrinfo tcpHints, *tcpRes;
-    struct sockaddr_in addr;
+    struct sockaddr_in server;
     vector<string> command;    
     FILE *file;
     string line;
-    cout << "Creating Socket" << endl;
-    tcpFd = socket(AF_INET, SOCK_STREAM, 0);
-    cout << "Socket Created" << endl;
-    memset(&tcpHints, 0, sizeof tcpHints);
-    cout << "Creating Hints" << endl;
-    tcpHints.ai_family = AF_INET;
-    tcpHints.ai_socktype = SOCK_STREAM;
-    getaddrinfo(server_ip.c_str(), port.c_str(), &tcpHints, &tcpRes);
-    cout << "Trying to connect";
-    connect(tcpFd, tcpRes->ai_addr, tcpRes->ai_addrlen);
-    
-    status = write(tcpFd, message.c_str(), message.length());
+
+    tcpFd = socket(AF_INET , SOCK_STREAM , 0);
+
+    memset(&server,0,sizeof(server));
+    server.sin_addr.s_addr = inet_addr(server_ip.c_str());
+    server.sin_family = AF_INET;
+    server.sin_port = htons(stoi(port));
+
+    connect(tcpFd , (struct sockaddr *)&server , sizeof(server)) < 0)
+
+    while (status < 0)
+        status = write(tcpFd, message.c_str(), message.length());
     status = -1;
     while (status < 0) {
-        cout << "Reading response" << endl;
         status = read(tcpFd, &buffer, sizeof(buffer));
         line = buffer;
         command = stringSplitter(line);
@@ -136,15 +165,14 @@ void sendMessageToServerTCP(string message) {
         fwrite(buffer, 1, readSize, file);
         currentSize += readSize;
     }
-    //if (command[0] == "RST")
-    //    printState();
+    if (command[0] == "RST")
+        printState();
     fclose(file);
     close(tcpFd);
 }
 
 void start(string plId) {
     vector<string> response = sendMessageToServer("SNG " + plId + "\n");
-    cout << "Received: ";
     printArray(response);
     if (response.size() == 0)
         return;
@@ -164,7 +192,6 @@ void start(string plId) {
 
 void play(string letter) {
     vector<string> response = sendMessageToServer("PLG " + to_string(playerId) + " " + toUpper(letter) + " " + to_string(currentMove) + "\n");
-    cout << "Received: ";
     printArray(response);
     if (response.size() == 0)
         return;
@@ -201,7 +228,6 @@ void play(string letter) {
 
 void guess(string word) {
     vector<string> response = sendMessageToServer("PWG " + to_string(playerId) + " " + toUpper(word) + " " + to_string(currentMove) + "\n");
-    cout << "Received: ";
     printArray(response);
     if (response.size() == 0)
         return;
@@ -282,15 +308,15 @@ void handleGame() {
 
 int main(int argc, char** args) {
     if (argc > 1) {
-        if (args[1] == "-n")
+        if (strcmp(args[1] ,"-n") == 0)
             server_ip = args[2];
-        else if (args[1] == "-p")
+        else if (strcmp(args[1] ,"-p") == 0)
             port = args[2];
     }
     if (argc > 3) {
-        if (args[3] == "-n")
+        if (strcmp(args[3],"-n") == 0)
             server_ip = args[4];
-        else if (args[3] == "-p")
+        else if (strcmp(args[3], "-p") == 0)
             port = args[4];
     }
     if (port.length() == 0)

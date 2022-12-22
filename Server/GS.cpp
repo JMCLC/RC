@@ -20,6 +20,7 @@
 #include <ctime>
 #include <math.h>
 #include <signal.h>
+#include<errno.h>
 
 using namespace std;
 
@@ -236,7 +237,8 @@ string play(int plId, string letter, int trial){
             game.missing--;
         }
     }
-    cout << "Missing: " << game.missing << " Positions: " << positions.size() << endl; 
+    if (verboseMode == 1)
+        cout << "Missing: " << game.missing << " Positions: " << positions.size() << endl; 
     if (game.missing == 0) {
         archiveGame(game, plId, 'W');
         return "RLG WIN\n";
@@ -295,7 +297,8 @@ void handleGame() {
         bufferStr = buffer;
         bufferStr.substr(0, n);
         currentCommand = stringSplitter(bufferStr);
-        cout << "Received command: " << printStringArray(currentCommand) << endl;
+        if (verboseMode == 1)
+            cout << "Received command: " << printStringArray(currentCommand) << endl;
         if (currentCommand[0] == "SNG") {
             if (currentCommand.size() != 2) {
                 cout << "Bad Formatting" << endl;
@@ -322,33 +325,42 @@ void handleGame() {
             } else
                 response = quit(stoi(currentCommand[1]));
         }
-        cout << "Sending command: " << response;
+        if (verboseMode == 1)
+            cout << "Sending command: " << response;
         n = sendto(fd, response.c_str(), response.length(), 0, (struct sockaddr*)&addr, addrlen);
     }
 }
 
 void handleTCP() {
-    int newFd, status = -1, plId, size, readSize, ret;
-    vector<string> currentCommand; 
-    struct sigaction act;
+    int newFd, tcpFd , c, readSize, ret, size = 0, plId, status = -1;
+    struct sockaddr_in server , client;
+    vector<string> currentCommand;
     char buffer[1024];
-    string line, message;
     FILE *file;
-    memset(&act, 0, sizeof(act));
-    act.sa_handler = SIG_IGN;
-    sigaction(SIGCHLD,&act,NULL);
+    string message, line;
+
+    tcpFd = socket(AF_INET , SOCK_STREAM , 0);
+
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server.sin_port = htons(stoi(S_port));
+    if (bind(tcpFd,(struct sockaddr *)&server , sizeof(server)) <0)
+        cout << "Bind failed" << endl;
+    listen(tcpFd , 3);        
+    c = sizeof(struct sockaddr_in);
+    if((newFd = accept(tcpFd, (struct sockaddr *)&client,(socklen_t*)&c))){
+        puts("Connection accepted");
+    }
     while (1) {
-        addrlen = sizeof(addr);
-        do newFd = accept(fd, (struct sockaddr*)&addr, &addrlen);
-        while (newFd == -1 && errcode == EINTR);
+        cout << newFd << endl;
         if ((subProcess = fork()) == 0) {
-            status = read(fd, &buffer, sizeof(buffer));
+            status = read(newFd, &buffer, sizeof(buffer));
             line = buffer;
             currentCommand = stringSplitter(line);
             if (currentCommand[0] == "GHL") {
                 plId = stoi(currentCommand[1]);
                 Game game = readGameFile(plId);
-                file = fopen(game.hint.c_str(), "r");
+                file = fopen("card.jpg", "r");
                 message = ("RHL OK " + game.hint + " ");
             } else if (currentCommand[0] == "STA")
                 plId = stoi(currentCommand[1]);
@@ -356,14 +368,14 @@ void handleTCP() {
             size = ftell(file);
             fseek(file, 0, SEEK_SET);
             message = (message + to_string(size));
-            write(fd, message.c_str(), message.length());
+            write(newFd, message.c_str(), message.length());
             while (status < 0)
-                status = read(fd, &buffer, sizeof(buffer));
+                status = read(newFd, &buffer, sizeof(buffer));
             while (!feof(file)) {
                 readSize = fread(buffer, 1, sizeof(buffer), file);
                 status = -1;
                 while (status < 0)
-                    status = write(fd, buffer, readSize);
+                    status = write(newFd, buffer, readSize);
                 bzero(buffer, sizeof(buffer));
             }
             close(newFd);
@@ -374,47 +386,6 @@ void handleTCP() {
     }
 }
 
-// void sendScoreboard(char buffer[128]){
-//     std::ifstream file("/home/gd/GS/SCORES/_top10_scores.txt");
-//     if(file_empty(file) == true){
-//         bzero(buffer,sizeof(buffer));
-        
-//     }
-// }
-
-// void createTCPconnection(string S_port){
-//     char buffer[128];
-//     string code;
-//     fd = socket(AF_INET,SOCK_STREAM,0);
-//     if(fd == -1) exit(1);
-
-//     memset(&hints,0,sizeof hints);
-//     hints.ai_family = AF_INET;
-//     hints.ai_socktype = SOCK_STREAM;
-//     hints.ai_flags = AI_PASSIVE;
-
-//     errcode = getaddrinfo(NULL,S_port.c_str(),&hints,&res);
-//     if((errcode != 0)) exit(1);
-
-//     n = bind(fd,res->ai_addr,res->ai_addrlen);
-//     if(n==-1) exit(1);
-
-//     if(listen(fd,100) == -1) exit(1);
-
-//     while(1){
-//         addrlen = sizeof(addr);
-//         if(newfd =accept(fd,(struct sockaddr*)&addr,&addrlen) == -1) exit(1);
-
-//         n = read(newfd,buffer,128);
-//         if(n == -1) exit(1);
-
-//         //sscanf(buffer,"%s",code);
-//         // if(code.compare("GSB") == 0){
-//         //     sendScoreboard(buffer);
-//         // }
-//     }
-// }
-
 int main(int argc, char** args){
     string tst;
     word_file = args[1];
@@ -424,16 +395,7 @@ int main(int argc, char** args){
         verboseMode = 1;
     }
     if ((connection_type = fork()) == 0) {
-        fd = socket(AF_INET, SOCK_STREAM, 0);
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = AI_PASSIVE;
-        errcode = getaddrinfo(NULL, S_port.c_str(), &hints, &res);
-        n = bind(fd, res->ai_addr, res->ai_addrlen);
-        handleTCP();
-        freeaddrinfo(res);
-        close(fd);
+        handleTCP(); 
     } else {
         fd=socket(AF_INET,SOCK_DGRAM,0);
         memset(&hints,0,sizeof(hints));
