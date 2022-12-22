@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -15,29 +16,59 @@
 #include <ctype.h>
 #include <iterator>
 #include <sstream>
+#include <fstream>
+#include <ctime>
+#include <math.h>
 
 using namespace std;
 
-typedef struct{
-    int currentMove = 1, maxErrors, currentErrors = 0, missing;
+typedef struct {
+    int currentMove, maxErrors, currentErrors, missing;
     vector<string> wordsGuessed;
     vector<char> lettersPlayed;
-    string word;
-} game;
+    string word, hint;
+} Game;
+
 
 int fd, newfd, errcode, verboseMode = 1;
 struct addrinfo hints,*res;
 struct sockaddr_in addr;
 string word_file,S_port;
-map<int,game> gameList;
+
+//map<int,Game> gameList;
 
 socklen_t addrlen;
 ssize_t n;
 
-void printArray(vector<string> array) {
+string printStringArray(vector<string> array) {
+    string text = "";
     for (int i = 0; i < array.size(); i++) {
-        cout << array[i] << endl;
+        text += array[i];
+        text += ' ';
     }
+    return text;
+}
+
+string printCharArray(vector<char> array) {
+    string text = "";
+    for (int i = 0; i < array.size(); i++) {
+        text += array[i];
+        text += ' ';
+    }
+    return text;
+}
+
+void printGame(Game current) {
+    cout << "Word: " << current.word << endl;
+    cout << "Current Move: " << current.currentMove << endl;
+    cout << "Max Errors: " << current.maxErrors << endl;
+    cout << "Current Errors: " << current.currentErrors << endl;
+    cout << "Missing: " << current.missing << endl;
+    cout << "Words Guessed: " << printStringArray(current.wordsGuessed) << endl;
+    cout << "Letters Played: ";
+    for (int i = 0; i < current.lettersPlayed.size(); i++)
+        cout << current.lettersPlayed[i] << " ";
+    cout << endl;
 }
 
 string toUpper(string text) {
@@ -72,58 +103,147 @@ string random_word() {
     return rw;
 }
 
-string start(string plId){
-    string response;
-    game newGame;
-    if (gameList.find(stoi(plId)) != gameList.end())
+void createGameFile(string fileName, Game game) {
+    ofstream File(fileName);
+    File << game.word << " " << game.hint << "\n" << game.currentMove << " " << game.maxErrors << " " << game.currentErrors << " " << game.missing << "\n" << printStringArray(game.wordsGuessed) << "\n" << printCharArray(game.lettersPlayed);
+    File.close();
+}
+
+void deleteGameFile(int plId) {
+    remove(("GAMES/GAME_" + to_string(plId) + ".txt").c_str());
+}
+
+void saveCurrentGame(Game game, int plId) {
+    deleteGameFile(plId);
+    createGameFile(("GAMES/GAME_" + to_string(plId) + ".txt"), game);
+}
+
+void saveGameScore(Game game, int plId, string time) {
+    int successfulTries = game.currentMove - game.currentErrors; 
+    double score = round(((successfulTries * 1.0) / (game.currentMove * 1.0)) * 100);
+    ofstream File(("SCORES/" + to_string((int) score) + "_" + to_string(plId) + "_" + time + ".txt"));
+    File << game.word << " " << successfulTries << " " << game.currentMove;
+    File.close();
+}
+
+void archiveGame(Game game, int plId, char operation) {
+    string folderName = ("GAMES/" + to_string(plId)), timeString, fileName;
+    struct stat status = { 0 };
+    time_t tempTime;
+    char buffer[128];
+    time(&tempTime);
+    struct tm *currentTime = localtime(&tempTime);
+    memset(buffer, 0, sizeof(buffer));
+    strftime(buffer, sizeof(buffer),"%Y%m%d_%H%M%S",currentTime);
+    timeString = buffer;
+    fileName = (timeString + "_" + operation + ".txt");
+    if(stat(folderName.c_str(), &status) == -1)
+        mkdir(folderName.c_str(), 0700);
+    ofstream File((folderName + "/" + fileName));
+    File << game.word << " " << game.hint << "\n" << game.currentMove << " " << game.maxErrors << " " << game.currentErrors << " " << game.missing << "\n" << printStringArray(game.wordsGuessed) << "\n" << printCharArray(game.lettersPlayed);
+    File.close();
+    deleteGameFile(plId);
+    if (operation == 'W')
+        saveGameScore(game, plId, timeString);
+}
+
+Game readGameFile(int plId) {    
+    vector<string> currentLine;
+    int lineNumber = 0;
+    string line;
+    Game game;
+    ifstream File(("GAMES/GAME_" + to_string(plId) + ".txt"));
+    if (!File) {
+        game.currentMove = -1;
+        return game;
+    }
+    cout << "Starting to read" << endl;
+    while (getline(File, line)) {
+        lineNumber++;
+        currentLine = stringSplitter(line);
+        if (lineNumber == 1) {
+            game.word = currentLine[0];
+            game.hint = currentLine[1];
+        } else if (lineNumber == 2) {
+            game.currentMove = stoi(currentLine[0]);
+            game.maxErrors = stoi(currentLine[1]);
+            game.currentErrors = stoi(currentLine[2]);
+            game.missing = stoi(currentLine[3]);
+        } else if (lineNumber == 3) {
+            for (int i = 0; i < currentLine.size(); i++)
+                game.wordsGuessed.push_back(currentLine[i]);
+        } else if (lineNumber == 4) {
+            for (int i = 0; i < currentLine.size(); i++)
+                game.lettersPlayed.push_back(currentLine[i][0]);
+        }
+    }
+    return game;
+}
+
+string start(int plId){
+    string response, word, fileName = ("GAMES/GAME_" + to_string(plId) + ".txt");
+    Game newGame;
+    ifstream File(fileName);
+    if (File)
         return "RSG NOK\n";
-    newGame.word = toUpper(random_word());
-    newGame.missing = newGame.word.length();
-    if (newGame.word.length() <= 6)
+    word = toUpper(random_word());
+    newGame.word = word.c_str();
+    newGame.hint = "PlaceHolder";
+    newGame.missing = word.length();
+    newGame.currentMove = 1;
+    newGame.currentErrors = 0;
+    newGame.wordsGuessed = {};
+    newGame.lettersPlayed = {};
+    if (word.length() <= 6)
         newGame.maxErrors = 7;
-    else if(newGame.word.length() <= 10)
+    else if(word.length() <= 10)
         newGame.maxErrors = 8;
     else 
         newGame.maxErrors = 9;
     if (verboseMode == 1)
-        cout << "PLID=" << plId << ": new game; word = \"" << newGame.word << "\" ("<< newGame.word.length() << " letters)" << endl;
-    response = ("RSG OK " + to_string(newGame.word.length()) + " " + to_string(newGame.maxErrors) + "\n");    
-    gameList[stoi(plId)] = newGame;
+        cout << "PLID=" << plId << ": new game; word = \"" << newGame.word << "\" ("<< word.length() << " letters)" << endl;
+    response = ("RSG OK " + to_string(word.length()) + " " + to_string(newGame.maxErrors) + "\n");
+    createGameFile(fileName, newGame);
     return response;
 }
 
 string play(int plId, string letter, int trial){
-    cout << trial  << gameList[plId].currentMove << endl;
-    if (letter.length() > 1 || gameList.find(plId) == gameList.end())
+    Game game = readGameFile(plId);
+    cout << trial  << game.currentMove << endl;
+    if (letter.length() > 1 || game.currentMove == -1)
         return "RLG ERR\n";
-    else if ((gameList[plId].currentMove - 1 == trial && gameList[plId].lettersPlayed.back() != letter[0])|| trial > gameList[plId].currentMove || trial < gameList[plId].currentMove - 1)
+    else if ((game.currentMove - 1 == trial && game.lettersPlayed.back() != letter[0]) || trial > game.currentMove || trial < game.currentMove - 1)
         return "RLG INV\n";
-    for (int i = 0; i < gameList[plId].lettersPlayed.size(); i++)
-        if (gameList[plId].lettersPlayed[i] == toupper(letter[0]))
+    for (int i = 0; i < game.lettersPlayed.size(); i++)
+        if (game.lettersPlayed[i] == toupper(letter[0]))
             return "RLG DUP\n";
-    gameList[plId].currentMove++;
-    gameList[plId].lettersPlayed.push_back(toupper(letter[0]));
-    if (gameList[plId].word.find(toupper(letter[0])) == string::npos) {
-        gameList[plId].currentErrors++;
-        if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
-            gameList.erase(plId);
+    game.currentMove++;
+    game.lettersPlayed.push_back(toupper(letter[0]));
+    string word = game.word;
+    if (word.find(toupper(letter[0])) == string::npos) {
+        game.currentErrors++;
+        if (game.currentErrors > game.maxErrors) {
+            archiveGame(game, plId, 'F');
             return "RLG OVR\n";
-        } else 
+        } else {
+            saveCurrentGame(game, plId);
             return "RLG NOK\n";
-    }
-    vector<int> positions;
-    for (int i = 0; i < gameList[plId].word.length(); i++) {
-        if (letter[0] == gameList[plId].word[i]) {
-            positions.push_back(i + 1);
-            gameList[plId].missing--;
         }
     }
-    cout << "Missing: " << gameList[plId].missing << " Positions: " << positions.size() << endl; 
-    if (gameList[plId].missing == 0) {
-        //winGame();
+    vector<int> positions;
+    for (int i = 0; i < word.length(); i++) {
+        if (letter[0] == game.word[i]) {
+            positions.push_back(i + 1);
+            game.missing--;
+        }
+    }
+    cout << "Missing: " << game.missing << " Positions: " << positions.size() << endl; 
+    if (game.missing == 0) {
+        archiveGame(game, plId, 'W');
         return "RLG WIN\n";
     }
-    string response = ("RLG OK " + to_string(gameList[plId].currentMove - 1) + " " + to_string(positions.size()) + " ");
+    string response = ("RLG OK " + to_string(game.currentMove - 1) + " " + to_string(positions.size()) + " ");
+    saveCurrentGame(game, plId);
     for (int i = 0; i < positions.size() - 1; i++)
         response.append((to_string(positions[i]) + " "));
     response.append(to_string(positions.back()));
@@ -131,56 +251,36 @@ string play(int plId, string letter, int trial){
 }
 
 string guess(int plId, string word, int trial){
-    if (gameList.find(plId) == gameList.end())
+    Game game = readGameFile(plId);
+    if (game.currentMove == -1)
         return "RWG ERR\n";
-    else if ((gameList[plId].currentMove - 1 == trial && gameList[plId].wordsGuessed.back() != word) || trial > gameList[plId].currentMove || trial < gameList[plId].currentMove - 1)
+    else if ((game.currentMove - 1 == trial && game.wordsGuessed.back() != word) || trial > game.currentMove || trial < game.currentMove - 1)
         return "RWG INV\n";
-    for (int i = 0; i < gameList[plId].wordsGuessed.size(); i++)
-        if (toUpper(gameList[plId].wordsGuessed[i]) == toUpper(word))
+    for (int i = 0; i < game.wordsGuessed.size(); i++)
+        if (toUpper(game.wordsGuessed[i]) == toUpper(word))
             return "RWG DUP\n";
-    gameList[plId].currentMove++;
-    if (gameList[plId].word != word) {
-        gameList[plId].currentErrors++;
-        if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
-            gameList.erase(plId);
+    game.currentMove++;
+    game.wordsGuessed.push_back(word);
+    if (game.word != word) {
+        game.currentErrors++;
+        if (game.currentErrors > game.maxErrors) {
+            archiveGame(game, plId, 'F');
             return "RWG OVR\n";
         } else {
-            gameList[plId].wordsGuessed.push_back(word);
+            saveCurrentGame(game, plId);
             return "RWG NOK\n";
         }
     }
-    //winGame();
+    archiveGame(game, plId, 'W');
     return "RWG WIN\n";
-    // string response,gameData;
-    //         fstream file;
-    // file.open(*"/home/gd/GS/SCORES/_"+ plId + "_31/12/2022.txt",ios::out);
-    // if(!file){
-    //     cout << "Error in creating file" << endl;
-    // }
-    // gameData = (plId  + " " + gameList[plId].word + " " + to_string(gameList[plId].currentMove-gameList[plId].currentErrors) + to_string(gameList[plId].currentMove));
-    // file << gameData;
-    // if (file.is_open()){
-    // cout << "Stream could not close!" << endl;
-    // }
-    // cout << "PLID=" << plId << "guess \"" + word + "\" -WIN (game ended)" << endl;
-    // //winGame();
-    // return "RWG WIN\n";
-    // if (gameList[plId].word == word) {
-    //     gameList[plId].currentErrors++;
-    //     if (gameList[plId].currentErrors > gameList[plId].maxErrors) {
-    //         gameList.erase(plId);
-    //         return "RWG OVR\n";
-    //     } else
-    //         return "RWG NOK\n";
-    // }
-    // return "ERR\n"; 
 }
 
 string quit(int plId) {
-    if (gameList.find(plId) == gameList.end())
+    Game game = readGameFile(plId);
+    if (game.currentMove == -1)
         return "RQT NOK\n";
     else {
-        gameList.erase(plId);
+        archiveGame(game, plId, 'Q');
         return "RQT OK\n";
     }
 }
@@ -196,10 +296,15 @@ void handleGame() {
         bufferStr = buffer;
         bufferStr.substr(0, n);
         currentCommand = stringSplitter(bufferStr);
-        cout << "Received command: " << buffer << endl;
-        if (currentCommand[0] == "SNG")
-            response = start(currentCommand[1]);
-        else if (currentCommand[0] == "PLG") { 
+        cout << "Received command: " << printStringArray(currentCommand) << endl;
+        if (currentCommand[0] == "SNG") {
+            if (currentCommand.size() != 2) {
+                cout << "Bad Formatting" << endl;
+                response = "RSG ERR\n";
+            } else
+                response = start(stoi(currentCommand[1]));
+            cout << "Received response " <<endl;
+        } else if (currentCommand[0] == "PLG") { 
             if (currentCommand.size() != 4) {
                 cout << "Bad Formatting" << endl;
                 response = "RLG ERR\n";

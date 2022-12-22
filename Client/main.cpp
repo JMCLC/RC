@@ -54,6 +54,15 @@ string toUpper(string text) {
     return text;
 }
 
+void resetGame() {
+    wordSize = 0;
+    maxErrors = 0;
+    currentErrors = 0;
+    currentMove = 0;
+    playerId = 0;
+    currentWord = "";
+}
+
 vector<string> sendMessageToServer(string message) {
     string response;
     char buffer[128];
@@ -160,7 +169,7 @@ void play(string letter) {
                     currentWord[i] = toupper(letter[0]);
             cout << "WELL DONE! You guessed: " << toUpper(printCurrentWord()) << endl;
             currentMove++;
-            //resetGame();
+            resetGame();
         } else if (response[1] == "DUP") {
             cout << "This letter has already been sent" << endl;
         } else if (response[1] == "NOK") {
@@ -190,7 +199,7 @@ void guess(string word) {
             currentWord = word;
             cout << "WELL DONE! You guessed: " << toUpper(printCurrentWord()) << endl;
             currentMove++; 
-            //resetGame();
+            resetGame();
         } else if (response[1] == "NOK") {
             cout << "No, " << word << " is not the word" << endl;
             currentErrors++;
