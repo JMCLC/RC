@@ -24,6 +24,8 @@
 
 using namespace std;
 
+int j=0,linenumber = 0;
+
 typedef struct {
     int currentMove, maxErrors, currentErrors, missing;
     vector<string> wordsGuessed;
@@ -85,22 +87,25 @@ vector<string> stringSplitter(string text) {
     return res;
 }
 
-string random_word() {
+vector <string> read_wordandhint() {
+    vector<string> currentLine;
+    vector <string> currentLineContent;
     string line;
-    vector<string> lines;
-    srand(time(0));
-    ifstream file(word_file);
-    
-    int total_lines=0;
-    while(getline(file,line)) {
-        total_lines++; 
-        lines.push_back(line);  
-    }
-   
-    int random_number=rand()%total_lines;
-    string rw = lines[random_number];
+    ifstream File(word_file);
 
-    return rw;
+    while(getline(File, line)){
+        linenumber++;
+    }
+    File.clear();
+    File.seekg(0);
+
+    for(int i =0;i < linenumber; i++) { 
+        getline(File, line);
+        currentLine = stringSplitter(line);
+        currentLineContent.push_back(currentLine[0]);
+        currentLineContent.push_back(currentLine[1]);
+    }
+    return currentLineContent;
 }
 
 void createGameFile(string fileName, Game game) {
@@ -182,13 +187,15 @@ Game readGameFile(int plId) {
 
 string start(int plId){
     string response, word, fileName = ("GAMES/GAME_" + to_string(plId) + ".txt");
+    vector <string> lineContent;
     Game newGame;
     ifstream File(fileName);
     if (File)
         return "RSG NOK\n";
-    word = toUpper(random_word());
+    lineContent = read_wordandhint();
+    word = toUpper(lineContent[j]);
     newGame.word = word.c_str();
-    newGame.hint = "PlaceHolder";
+    newGame.hint = lineContent[j+1];
     newGame.missing = word.length();
     newGame.currentMove = 1;
     newGame.currentErrors = 0;
@@ -204,6 +211,10 @@ string start(int plId){
         cout << "PLID=" << plId << ": new game; word = \"" << newGame.word << "\" ("<< word.length() << " letters)" << endl;
     response = ("RSG OK " + to_string(word.length()) + " " + to_string(newGame.maxErrors) + "\n");
     createGameFile(fileName, newGame);
+    j += 2;
+    if (j*2 == linenumber){
+        j = 0;
+    }
     return response;
 }
 
