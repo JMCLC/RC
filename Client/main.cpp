@@ -83,33 +83,6 @@ vector<string> sendMessageToServer(string message) {
     return stringSplitter(response);
 }
 
-
-
-void sendMessageToServerTCP(string message) {
-    int socket_desc;
-    struct sockaddr_in server;
-    char *parray;
-
-
-    //Create socket
-    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-
-    if (socket_desc == -1) {
-    printf("Could not create socket");
-    }
-
-    memset(&server,0,sizeof(server));
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
-    server.sin_family = AF_INET;
-    server.sin_port = htons(stoi(port));
-
-    //Connect to remote server
-    connect(socket_desc , (struct sockaddr *)&server , sizeof(server));
-    receive_image(socket_desc);
-
-    close(socket_desc);
-}
-
 void sendMessageToServerTCP(string message) {
     int size = 0, bufferSize = 0, status = -1, currentSize = 0, tcpFd, readSize = -1;
     char buffer[10241], confirmation[] = "OK";
@@ -125,7 +98,7 @@ void sendMessageToServerTCP(string message) {
     server.sin_family = AF_INET;
     server.sin_port = htons(stoi(port));
 
-    connect(tcpFd , (struct sockaddr *)&server , sizeof(server)) < 0)
+    connect(tcpFd , (struct sockaddr *)&server , sizeof(server)) < 0);
 
     while (status < 0)
         status = write(tcpFd, message.c_str(), message.length());
