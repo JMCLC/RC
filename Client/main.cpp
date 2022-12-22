@@ -78,57 +78,57 @@ vector<string> sendMessageToServer(string message) {
     return stringSplitter(response);
 }
 
-void printScoreboard(string text) {
-    return;
-}
-
-void printGameState(string text) {
-    return;
-}
-
 void sendMessageToServerTCP(string message) {
-    struct addrinfo tcp_hints;
-    vector<string> response;
-    string currentString, stringBuffer;
-    char buffer[128];
-    ssize_t tcp_n;
-    int tcp_fd = socket(AF_INET, SOCK_STREAM, 0), currentSize = 0, count = 0;
-    tcp_hints.ai_family = AF_INET;
-    tcp_hints.ai_socktype = SOCK_STREAM;
-    tcp_n = connect(tcp_fd, res->ai_addr, res->ai_addrlen);
-    tcp_n = write(tcp_fd, message.c_str(), sizeof(message.c_str()));
-    tcp_n = read(tcp_fd, buffer, 128);
-    stringBuffer = buffer;
-    response = stringSplitter(stringBuffer);
-    if (response[1] == "OK") {
-        ofstream File(response[2]);
-        for (int i = 0; i < sizeof(buffer); i++) {
-            if (buffer[i] == ' ') {
-                count++;
-            }
-            if (count == 4) {
-                currentString = buffer;
-                currentString = currentString.substr(i + 1, sizeof(i + 2));
-                break;
-            }
+    int size = 0, bufferSize = 0, status = -1, currentSize = 0, tcpFd, readSize = -1;
+    char buffer[10241], confirmation[] = "OK";
+    struct addrinfo hints, *res;
+    struct sockaddr_in addr;
+    vector<string> command;    
+    
+    
+    FILE *file;
+    string line;
+    tcpFd = socket(AF_INET, SOCK_STREAM, 0);
+    connect(tcpFd, res->ai_addr, res->ai_addrlen);
+    while (status < 0) {
+        status = read(socket, &buffer, sizeof(buffer));
+        line = buffer;
+        command = stringSplitter(line);
+        if (command[1] == "EMPTY") {
+            cout << "No game yet has been won" << endl;
+            return;
+        } else if (command[1] == "NOK" && command[0] == "RHL") {
+            cout << "There is no hint for this word" << endl;
+            return;
+        } else if (command[1] == "NOK") {
+            cout << "No games found for this player" << endl;
+            return;
         }
-        for (currentSize = sizeof(currentString); currentSize < stoi(response[3]); currentSize += sizeof(currentString)) {
-            File << currentString;
-            if (stoi(response[3]) - currentSize < 128)
-                tcp_n = read(tcp_fd, buffer, stoi(response[3]) - currentSize);
-            else
-                tcp_n = read(tcp_fd, buffer, 128);
-            currentString = buffer; 
-        }
-        File.close();
+        size = stoi(command[3]);
     }
-    if (response[0] == "RSB")
-        printScoreboard(response[2]);
-    else if (response[0] == "RHL")
-        cout << "received hint file: " << response[2] << " (" << response[3] << " bytes)" << endl;
-    else if (response[0] == "RST")
-        printGameState(response[2]);
-    close(tcp_n);
+    status = -1;
+    while (status < 0) {
+        status = write(tcpFd, &confirmation, sizeof(int));
+    }
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    file = fopen(command[2], "w");
+    int bufferFd;
+    fd_set fds;
+    while (currentSize < size) {
+        FD_ZERO(&fds);
+        FD_SET(tcpFd, &fds);
+        bufferFd = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
+        while (read < 0)
+            read = read(tcpFd, buffer, sizeof(buffer));
+        fwrite(buffer, 1, read, file);
+        currentSize += read;
+    }
+    if (command[0] == "RST")
+        printState();
+    fclose(file);
+    close(tcpFd);
 }
 
 void start(string plId) {
@@ -218,15 +218,15 @@ void guess(string word) {
 }
 
 void scoreboard() {
-    return;
+    sendMessageToServerTCP("GSB");
 }
 
-void hint() {
-    return;
+void hint(string plId) {
+    sendMessageToServerTCP(("GHL " + plId));
 }
 
-void state() {
-    return;
+void state(string plId) {
+    sendMessageToServerTCP(("STA " + plId));
 }
 
 void quit(string command) {
@@ -270,17 +270,17 @@ void handleGame() {
 }
 
 int main(int argc, char** args) {
-    if (argc > 0) {
-        if (args[0] == "-n")
-            server_ip = args[1];
-        else if (args[0] == "-p")
-            port = args[1];
+    if (argc > 1) {
+        if (args[1] == "-n")
+            server_ip = args[2];
+        else if (args[1] == "-p")
+            port = args[2];
     }
-    if (argc > 2) {
-        if (args[2] == "-n")
-            server_ip = args[3];
-        else if (args[2] == "-p")
-            port = args[3];
+    if (argc > 3) {
+        if (args[3] == "-n")
+            server_ip = args[4];
+        else if (args[3] == "-p")
+            port = args[4];
     }
     if (port.length() == 0)
         port = "58061";

@@ -29,13 +29,11 @@ typedef struct {
     string word, hint;
 } Game;
 
-
 int fd, newfd, errcode, verboseMode = 1;
+p_id connection_type, subProcess;
 struct addrinfo hints,*res;
 struct sockaddr_in addr;
 string word_file,S_port;
-
-//map<int,Game> gameList;
 
 socklen_t addrlen;
 ssize_t n;
@@ -381,12 +379,19 @@ int main(int argc, char** args){
     } else if(strcmp(args[2],"-v")==0){ 
         printf("58011\n");
     }
-    fd=socket(AF_INET,SOCK_DGRAM,0); //UDP socket
-    memset(&hints,0,sizeof hints);
-    hints.ai_family=AF_INET; // IPv4
-    hints.ai_socktype=SOCK_DGRAM; // UDP socket
-    hints.ai_flags=AI_PASSIVE;
-    errcode=getaddrinfo(NULL, S_port.c_str(), &hints, &res);
+    if ((connection_type = fork()) == 0) {
+        fd = socket(AF_INET, SOCK_STREAM, 0);
+        
+    } else {
+        fd=socket(AF_INET,SOCK_DGRAM,0);
+        memset(&hints,0,sizeof hints);
+        hints.ai_family=AF_INET;
+        hints.ai_socktype=SOCK_DGRAM;
+        hints.ai_flags=AI_PASSIVE;
+        errcode=getaddrinfo(NULL, S_port.c_str(), &hints, &res);
+    }
+
+    
     n = bind(fd, res->ai_addr, res->ai_addrlen);
     handleGame();
     freeaddrinfo(res);
