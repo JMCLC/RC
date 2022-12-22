@@ -79,19 +79,30 @@ vector<string> sendMessageToServer(string message) {
 }
 
 void sendMessageToServerTCP(string message) {
+    cout << "Trying TCP" << endl;
     int size = 0, bufferSize = 0, status = -1, currentSize = 0, tcpFd, readSize = -1;
     char buffer[10241], confirmation[] = "OK";
-    struct addrinfo hints, *res;
+    struct addrinfo tcpHints, *tcpRes;
     struct sockaddr_in addr;
     vector<string> command;    
-    
-    
     FILE *file;
     string line;
+    cout << "Creating Socket" << endl;
     tcpFd = socket(AF_INET, SOCK_STREAM, 0);
-    connect(tcpFd, res->ai_addr, res->ai_addrlen);
+    cout << "Socket Created" << endl;
+    memset(&tcpHints, 0, sizeof tcpHints);
+    cout << "Creating Hints" << endl;
+    tcpHints.ai_family = AF_INET;
+    tcpHints.ai_socktype = SOCK_STREAM;
+    getaddrinfo(server_ip.c_str(), port.c_str(), &tcpHints, &tcpRes);
+    cout << "Trying to connect";
+    connect(tcpFd, tcpRes->ai_addr, tcpRes->ai_addrlen);
+    
+    status = write(tcpFd, message.c_str(), message.length());
+    status = -1;
     while (status < 0) {
-        status = read(socket, &buffer, sizeof(buffer));
+        cout << "Reading response" << endl;
+        status = read(tcpFd, &buffer, sizeof(buffer));
         line = buffer;
         command = stringSplitter(line);
         if (command[1] == "EMPTY") {
@@ -113,20 +124,20 @@ void sendMessageToServerTCP(string message) {
     struct timeval timeout;
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
-    file = fopen(command[2], "w");
+    file = fopen(command[2].c_str(), "w");
     int bufferFd;
     fd_set fds;
     while (currentSize < size) {
         FD_ZERO(&fds);
         FD_SET(tcpFd, &fds);
         bufferFd = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
-        while (read < 0)
-            read = read(tcpFd, buffer, sizeof(buffer));
-        fwrite(buffer, 1, read, file);
-        currentSize += read;
+        while (readSize < 0)
+            readSize = read(tcpFd, buffer, sizeof(buffer));
+        fwrite(buffer, 1, readSize, file);
+        currentSize += readSize;
     }
-    if (command[0] == "RST")
-        printState();
+    //if (command[0] == "RST")
+    //    printState();
     fclose(file);
     close(tcpFd);
 }
@@ -221,8 +232,8 @@ void scoreboard() {
     sendMessageToServerTCP("GSB");
 }
 
-void hint(string plId) {
-    sendMessageToServerTCP(("GHL " + plId));
+void hint() {
+    sendMessageToServerTCP(("GHL " + to_string(playerId)));
 }
 
 void state(string plId) {
@@ -260,7 +271,7 @@ void handleGame() {
         else if (command[0] == "hint" || command[0] == "h")
             hint();
         else if (command[0] == "state" || command[0] == "st")
-            state();
+            state(command[1]);
         else if (command[0] == "quit" || command[0] == "exit")
             quit(command[0]);
         else
@@ -285,7 +296,7 @@ int main(int argc, char** args) {
     if (port.length() == 0)
         port = "58061";
     if (server_ip.length() == 0)
-        server_ip = "127.0.0.1";
+        server_ip = "localhost";
     cout << "Connecting to server: " << server_ip << ":" << port << endl;
     struct timeval timeout;
     timeout.tv_sec = 5;

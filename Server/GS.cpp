@@ -19,6 +19,7 @@
 #include <fstream>
 #include <ctime>
 #include <math.h>
+#include <signal.h>
 
 using namespace std;
 
@@ -30,7 +31,7 @@ typedef struct {
 } Game;
 
 int fd, newfd, errcode, verboseMode = 1;
-p_id connection_type, subProcess;
+pid_t connection_type, subProcess;
 struct addrinfo hints,*res;
 struct sockaddr_in addr;
 string word_file,S_port;
@@ -326,8 +327,51 @@ void handleGame() {
     }
 }
 
-bool file_empty(std::ifstream& pFile){
-     return pFile.peek() == std::ifstream::traits_type::eof();
+void handleTCP() {
+    int newFd, status = -1, plId, size, readSize, ret;
+    vector<string> currentCommand; 
+    struct sigaction act;
+    char buffer[1024];
+    string line, message;
+    FILE *file;
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = SIG_IGN;
+    sigaction(SIGCHLD,&act,NULL);
+    while (1) {
+        addrlen = sizeof(addr);
+        do newFd = accept(fd, (struct sockaddr*)&addr, &addrlen);
+        while (newFd == -1 && errcode == EINTR);
+        if ((subProcess = fork()) == 0) {
+            status = read(fd, &buffer, sizeof(buffer));
+            line = buffer;
+            currentCommand = stringSplitter(line);
+            if (currentCommand[0] == "GHL") {
+                plId = stoi(currentCommand[1]);
+                Game game = readGameFile(plId);
+                file = fopen(game.hint.c_str(), "r");
+                message = ("RHL OK " + game.hint + " ");
+            } else if (currentCommand[0] == "STA")
+                plId = stoi(currentCommand[1]);
+            fseek(file, 0, SEEK_END);
+            size = ftell(file);
+            fseek(file, 0, SEEK_SET);
+            message = (message + to_string(size));
+            write(fd, message.c_str(), message.length());
+            while (status < 0)
+                status = read(fd, &buffer, sizeof(buffer));
+            while (!feof(file)) {
+                readSize = fread(buffer, 1, sizeof(buffer), file);
+                status = -1;
+                while (status < 0)
+                    status = write(fd, buffer, readSize);
+                bzero(buffer, sizeof(buffer));
+            }
+            close(newFd);
+            exit(0);
+        }
+        do ret = close(newFd);
+        while (ret == -1 && errcode == EINTR);
+    }
 }
 
 // void sendScoreboard(char buffer[128]){
@@ -338,38 +382,38 @@ bool file_empty(std::ifstream& pFile){
 //     }
 // }
 
-void createTCPconnection(string S_port){
-    char buffer[128];
-    string code;
-    fd = socket(AF_INET,SOCK_STREAM,0);
-    if(fd == -1) exit(1);
+// void createTCPconnection(string S_port){
+//     char buffer[128];
+//     string code;
+//     fd = socket(AF_INET,SOCK_STREAM,0);
+//     if(fd == -1) exit(1);
 
-    memset(&hints,0,sizeof hints);
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
+//     memset(&hints,0,sizeof hints);
+//     hints.ai_family = AF_INET;
+//     hints.ai_socktype = SOCK_STREAM;
+//     hints.ai_flags = AI_PASSIVE;
 
-    errcode = getaddrinfo(NULL,S_port.c_str(),&hints,&res);
-    if((errcode != 0)) exit(1);
+//     errcode = getaddrinfo(NULL,S_port.c_str(),&hints,&res);
+//     if((errcode != 0)) exit(1);
 
-    n = bind(fd,res->ai_addr,res->ai_addrlen);
-    if(n==-1) exit(1);
+//     n = bind(fd,res->ai_addr,res->ai_addrlen);
+//     if(n==-1) exit(1);
 
-    if(listen(fd,100) == -1) exit(1);
+//     if(listen(fd,100) == -1) exit(1);
 
-    while(1){
-        addrlen = sizeof(addr);
-        if(newfd =accept(fd,(struct sockaddr*)&addr,&addrlen) == -1) exit(1);
+//     while(1){
+//         addrlen = sizeof(addr);
+//         if(newfd =accept(fd,(struct sockaddr*)&addr,&addrlen) == -1) exit(1);
 
-        n = read(newfd,buffer,128);
-        if(n == -1) exit(1);
+//         n = read(newfd,buffer,128);
+//         if(n == -1) exit(1);
 
-        //sscanf(buffer,"%s",code);
-        // if(code.compare("GSB") == 0){
-        //     sendScoreboard(buffer);
-        // }
-    }
-}
+//         //sscanf(buffer,"%s",code);
+//         // if(code.compare("GSB") == 0){
+//         //     sendScoreboard(buffer);
+//         // }
+//     }
+// }
 
 int main(int argc, char** args){
     string tst;
@@ -377,24 +421,30 @@ int main(int argc, char** args){
     if(strcmp(args[2],"-p")==0){ 
         S_port = args[3];
     } else if(strcmp(args[2],"-v")==0){ 
-        printf("58011\n");
+        verboseMode = 1;
     }
     if ((connection_type = fork()) == 0) {
         fd = socket(AF_INET, SOCK_STREAM, 0);
-        
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+        errcode = getaddrinfo(NULL, S_port.c_str(), &hints, &res);
+        n = bind(fd, res->ai_addr, res->ai_addrlen);
+        handleTCP();
+        freeaddrinfo(res);
+        close(fd);
     } else {
         fd=socket(AF_INET,SOCK_DGRAM,0);
-        memset(&hints,0,sizeof hints);
+        memset(&hints,0,sizeof(hints));
         hints.ai_family=AF_INET;
         hints.ai_socktype=SOCK_DGRAM;
         hints.ai_flags=AI_PASSIVE;
-        errcode=getaddrinfo(NULL, S_port.c_str(), &hints, &res);
+        errcode=getaddrinfo(NULL, S_port.c_str(), &hints, &res);    
+        n = bind(fd, res->ai_addr, res->ai_addrlen);
+        handleGame();    
+        freeaddrinfo(res);
+        close(fd);
     }
-
-    
-    n = bind(fd, res->ai_addr, res->ai_addrlen);
-    handleGame();
-    freeaddrinfo(res);
-    close(fd);
     return 0;
 }
